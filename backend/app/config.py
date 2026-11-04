@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     openai_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
+    upload_dir: str = "uploads"
+    max_upload_mb: int = 20
 
     @property
     def cors_origin_list(self) -> list[str]:
