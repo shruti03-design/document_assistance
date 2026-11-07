@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     upload_dir: str = "uploads"
     max_upload_mb: int = 20
+    chunk_size: int = 1000      # characters
+    chunk_overlap: int = 200    # characters
 
     @property
     def cors_origin_list(self) -> list[str]:

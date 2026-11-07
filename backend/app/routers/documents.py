@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app import storage
 from app.config import settings
 from app.db import get_db
-from app.models import Document, DocumentStatus
-from app.schemas import DocumentOut, DocumentTextOut
+from app.models import Chunk, Document, DocumentStatus
+from app.schemas import ChunkOut, DocumentOut, DocumentTextOut
+from app.services.chunking import chunk_pages
 from app.services.extraction import ExtractionError, extract_pages
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -49,6 +50,10 @@ async def upload_document(file: UploadFile, db: Session = Depends(get_db)):
     try:
         pages = extract_pages(storage.file_path(stored_name), document.content_type)
         document.page_count = len(pages)
+        document.chunks = [
+            Chunk(chunk_index=c.chunk_index, page_number=c.page_number, text=c.text)
+            for c in chunk_pages(pages, settings.chunk_size, settings.chunk_overlap)
+        ]
     except ExtractionError as exc:
         document.status = DocumentStatus.FAILED
         document.error = str(exc)
@@ -87,3 +92,11 @@ def get_document_text(document_id: int, db: Session = Depends(get_db)):
         page_count=len(pages),
         pages=[{"page_number": p.page_number, "text": p.text} for p in pages],
     )
+
+
+@router.get("/{document_id}/chunks", response_model=list[ChunkOut])
+def get_document_chunks(document_id: int, db: Session = Depends(get_db)):
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document.chunks
