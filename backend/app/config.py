@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     chunk_size: int = 1000      # characters
     chunk_overlap: int = 200    # characters
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
+    embedding_batch_size: int = 100
 
     @property
     def cors_origin_list(self) -> list[str]:
