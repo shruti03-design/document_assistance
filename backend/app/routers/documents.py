@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app import storage
 from app.config import settings
 from app.db import get_db
-from app.models import Document
-from app.schemas import DocumentOut
+from app.models import Document, DocumentStatus
+from app.schemas import DocumentOut, DocumentTextOut
+from app.services.extraction import ExtractionError, extract_pages
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -44,6 +45,14 @@ async def upload_document(file: UploadFile, db: Session = Depends(get_db)):
         content_type=ALLOWED_TYPES[extension],
         size_bytes=len(data),
     )
+
+    try:
+        pages = extract_pages(storage.file_path(stored_name), document.content_type)
+        document.page_count = len(pages)
+    except ExtractionError as exc:
+        document.status = DocumentStatus.FAILED
+        document.error = str(exc)
+
     db.add(document)
     db.commit()
     db.refresh(document)
@@ -61,3 +70,20 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
+
+
+@router.get("/{document_id}/text", response_model=DocumentTextOut)
+def get_document_text(document_id: int, db: Session = Depends(get_db)):
+    """Return the extracted text page by page (useful for checking extraction quality)."""
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        pages = extract_pages(storage.file_path(document.stored_name), document.content_type)
+    except ExtractionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return DocumentTextOut(
+        document_id=document.id,
+        page_count=len(pages),
+        pages=[{"page_number": p.page_number, "text": p.text} for p in pages],
+    )
