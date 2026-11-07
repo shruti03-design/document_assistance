@@ -30,3 +30,21 @@ npm install
 npm run dev
 ```
 App: http://localhost:5173
+
+The frontend talks to `http://localhost:8000` by default. To change it, copy
+`frontend/.env.example` to `frontend/.env` and set `VITE_API_URL`.
+
+## How it works
+1. **Upload** a PDF/TXT → the file is saved and a `documents` row is created in MySQL.
+2. **Index** (background task): extract text per page → split into overlapping chunks →
+   embed with OpenAI → store vectors in Qdrant (chunk text + page number as payload).
+3. **Ask** → the question is embedded, the most similar chunks are retrieved from Qdrant,
+   and the LLM answers using only those chunks, citing them as `[1]`, `[2]`, ...
+
+## Running tests
+Tests use SQLite, an in-memory Qdrant and fake OpenAI responses, so they need no Docker or API key.
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
