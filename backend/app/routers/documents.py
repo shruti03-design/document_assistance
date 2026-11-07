@@ -1,16 +1,16 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import storage
 from app.config import settings
 from app.db import get_db
-from app.models import Chunk, Document, DocumentStatus
+from app.models import Document
 from app.schemas import ChunkOut, DocumentOut, DocumentTextOut
-from app.services.chunking import chunk_pages
 from app.services.extraction import ExtractionError, extract_pages
+from app.services.indexing import index_document_in_background
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -21,7 +21,10 @@ ALLOWED_TYPES = {
 
 
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
-async def upload_document(file: UploadFile, db: Session = Depends(get_db)):
+async def upload_document(
+    file: UploadFile, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """Save the file and index it in the background. Poll GET /documents/{id} for status."""
     filename = file.filename or ""
     extension = Path(filename).suffix.lower()
     if extension not in ALLOWED_TYPES:
@@ -46,21 +49,12 @@ async def upload_document(file: UploadFile, db: Session = Depends(get_db)):
         content_type=ALLOWED_TYPES[extension],
         size_bytes=len(data),
     )
-
-    try:
-        pages = extract_pages(storage.file_path(stored_name), document.content_type)
-        document.page_count = len(pages)
-        document.chunks = [
-            Chunk(chunk_index=c.chunk_index, page_number=c.page_number, text=c.text)
-            for c in chunk_pages(pages, settings.chunk_size, settings.chunk_overlap)
-        ]
-    except ExtractionError as exc:
-        document.status = DocumentStatus.FAILED
-        document.error = str(exc)
-
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    # Runs after the response is sent: extract -> chunk -> embed -> store in Qdrant
+    background_tasks.add_task(index_document_in_background, document.id)
     return document
 
 

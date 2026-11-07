@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = "mysql+pymysql://docassist:docassist@localhost:3306/docassist"
     qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "document_chunks"
     openai_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
     upload_dir: str = "uploads"
