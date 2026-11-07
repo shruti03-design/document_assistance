@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
     embedding_batch_size: int = 100
+    chat_model: str = "gpt-4o-mini"
+    retrieval_top_k: int = 5
 
     @property
     def cors_origin_list(self) -> list[str]:
